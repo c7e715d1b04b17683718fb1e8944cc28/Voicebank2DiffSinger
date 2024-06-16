@@ -106,7 +106,7 @@ def main():
                     *KATAKANA_REGEX.findall(words),
                 ]
                 with open(
-                    voicebank_folder_path + "/" + file_name + ".txt",
+                    str(voicebank_folder_path) + "/" + file_name + ".txt",
                     "w",
                     encoding="utf-8",
                 ) as f:
@@ -165,7 +165,7 @@ def main():
                     end_time = int(float(end) * 10000000)
                     label += f"{start_time} {end_time} {ph}\n"
                 with open(
-                    voicebank_folder_path + "/" + file_name + ".lab",
+                    str(voicebank_folder_path) + "/" + file_name + ".lab",
                     "w",
                     encoding="utf-8",
                 ) as f:
