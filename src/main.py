@@ -2,10 +2,8 @@ import sys
 
 sys.path.append("src/SOFA")
 sys.path.append("src/SOFA/modules")
-import os
-import glob
+sys.path.append("src/MakeDiffSinger/acoustic_forced_alignment")
 import pathlib
-import shutil
 import tqdm
 import re
 from SOFA.modules.g2p.base_g2p import DataFrameDataset
@@ -18,12 +16,32 @@ import SOFA.modules.AP_detector
 import torch
 from SOFA.train import LitForcedAlignmentTask
 import lightning as pl
-import datetime
+from click import Context
+from MakeDiffSinger.acoustic_forced_alignment.build_dataset import build_dataset
 
 
 VERSION = "0.0.1"
 HIRAGANA_REGEX = re.compile(r"([あ-ん][ぁぃぅぇぉゃゅょ]|[あ-ん])")
 KATAKANA_REGEX = re.compile(r"([ア-ン][ァィゥェォャュョ]|[ア-ン])")
+
+
+def remove_specific_consecutive_duplicates(
+    input_list: list[str], specific_elements: list[str]
+):
+    if not input_list:
+        return []
+
+    # Initialize the result list with the first element
+    result = [input_list[0]]
+
+    # Iterate through the input list starting from the second element
+    for item in input_list[1:]:
+        # If the current item is different from the last item in the result list
+        # or if it is not in the specific elements list, add it
+        if item != result[-1] or item not in specific_elements:
+            result.append(item)
+
+    return result
 
 
 class PyOpenJTalkG2P:
@@ -67,17 +85,18 @@ class PyOpenJTalkG2P:
 
         return ph_seq, word_seq, ph_idx_to_word_idx
 
-    def get_dataset(self, wav_path: pathlib.Path):
+    def get_dataset(self, wav_paths: list[pathlib.Path]):
         dataset = []
-        try:
-            if wav_path.with_suffix(".txt").exists():
-                with open(wav_path.with_suffix(".txt"), "r", encoding="utf-8") as f:
-                    lab_text = f.read().strip()
-                ph_seq, word_seq, ph_idx_to_word_idx = self(lab_text)
-                dataset.append((wav_path, ph_seq, word_seq, ph_idx_to_word_idx))
-        except Exception as e:
-            e.args = (f" Error when processing {wav_path}: {e} ",)
-            raise e
+        for wav_path in wav_paths:
+            try:
+                if wav_path.with_suffix(".txt").exists():
+                    with open(wav_path.with_suffix(".txt"), "r", encoding="utf-8") as f:
+                        lab_text = f.read().strip()
+                    ph_seq, word_seq, ph_idx_to_word_idx = self(lab_text)
+                    dataset.append((wav_path, ph_seq, word_seq, ph_idx_to_word_idx))
+            except Exception as e:
+                e.args = (f" Error when processing {wav_path}: {e} ",)
+                raise e
         dataset = pd.DataFrame(
             dataset, columns=["wav_path", "ph_seq", "word_seq", "ph_idx_to_word_idx"]
         )
@@ -101,10 +120,13 @@ def main():
             for wav_file in voicebank_wav_files:
                 file_name = pathlib.Path(wav_file).stem
                 words = file_name[1:]
-                graphemes = [
-                    *HIRAGANA_REGEX.findall(words),
-                    *KATAKANA_REGEX.findall(words),
-                ]
+                graphemes = remove_specific_consecutive_duplicates(
+                    [
+                        *HIRAGANA_REGEX.findall(words),
+                        *KATAKANA_REGEX.findall(words),
+                    ],
+                    ["あ", "い", "う", "え", "お", "ん"],
+                )
                 with open(
                     str(voicebank_folder_path) + "/" + file_name + ".txt",
                     "w",
@@ -116,7 +138,7 @@ def main():
     print()
     print("Phase 1: Done.")
     print()
-    print("Phase 2: Generating label files...")
+    print("Phase 2: Generating TextGrids...")
     print()
 
     AP_detector_class = SOFA.modules.AP_detector.LoudnessSpectralcentroidAPDetector
@@ -136,65 +158,40 @@ def main():
 
     for voicebank_folder_path in voicebank_dirs:
         voicebank_wav_files = list(voicebank_folder_path.glob("*.wav"))
-        for wav_file in voicebank_wav_files:
-            print()
-            file_name = pathlib.Path(wav_file).stem
-            print(file_name)
+        dataset = grapheme_to_phoneme.get_dataset(
+            list(voicebank_folder_path.glob("*.wav"))
+        )
 
-            dataset = grapheme_to_phoneme.get_dataset(pathlib.Path(wav_file))
+        predictions = trainer.predict(
+            model, dataloaders=dataset, return_predictions=True
+        )
 
-            predictions = trainer.predict(
-                model, dataloaders=dataset, return_predictions=True
-            )
+        predictions = get_AP.process(predictions)
+        predictions = SOFA.infer.post_processing(predictions)
 
-            predictions = get_AP.process(predictions)
-            predictions = SOFA.infer.post_processing(predictions)
-
-            for (
-                wav_path,
-                wav_length,
-                confidence,
-                ph_seq,
-                ph_intervals,
-                word_seq,
-                word_intervals,
-            ) in predictions:
-                label = ""
-                for ph, (start, end) in zip(ph_seq, ph_intervals):
-                    start_time = int(float(start) * 10000000)
-                    end_time = int(float(end) * 10000000)
-                    label += f"{start_time} {end_time} {ph}\n"
-                with open(
-                    str(voicebank_folder_path) + "/" + file_name + ".lab",
-                    "w",
-                    encoding="utf-8",
-                ) as f:
-                    f.write(label)
+        SOFA.infer.save_textgrids(predictions)
 
     print()
     print("Phase 2: Done.")
     print()
-    print("Phase 3: Generating directory structure...")
+    print("Phase 3: Build dataset...")
     print()
 
-    folder_name = f"output/{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
-    os.makedirs(folder_name)
     for voicebank_folder_path in voicebank_dirs:
-        with tqdm.tqdm(total=len(voicebank_wav_files)) as pbar:
-            suffix = voicebank_folder_path.stem
-            voicebank_wav_files = list(voicebank_folder_path.glob("*.wav"))
-            for wav_file in voicebank_wav_files:
-                file_name = pathlib.Path(wav_file).stem
-                os.mkdir(f"{folder_name}/{file_name}_{suffix}")
-                shutil.copy(
-                    wav_file,
-                    f"{folder_name}/{file_name}_{suffix}/{file_name}_{suffix}.wav",
-                )
-                shutil.copy(
-                    voicebank_folder_path / f"{file_name}.lab",
-                    f"{folder_name}/{file_name}_{suffix}/{file_name}_{suffix}.lab",
-                )
-                pbar.update(1)
+        ctx = Context(build_dataset)
+        with ctx:
+            build_dataset.parse_args(
+                ctx,
+                [
+                    "--wavs",
+                    str(voicebank_folder_path),
+                    "--tg",
+                    str(voicebank_folder_path / "TextGrid"),
+                    "--dataset",
+                    str(voicebank_folder_path / "Dataset"),
+                ],
+            )
+            build_dataset.invoke(ctx)
 
     print()
     print("Phase 3: Done.")
