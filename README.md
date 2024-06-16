@@ -1,4 +1,4 @@
-# Voicebank2Database
+# Voicebank2DiffSinger
 UTAUの音源ファイルからSOFAとMakeDiffSingerを用いて、学習前のデータセットを生成する
 
 ## 前提要件
