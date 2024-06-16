@@ -1,0 +1,3 @@
+[submodule "src/SOFA"]
+	path = src/SOFA
+	url = https://github.com/qiuqiao/SOFA
