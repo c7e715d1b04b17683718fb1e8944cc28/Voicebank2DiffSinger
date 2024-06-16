@@ -2,8 +2,10 @@ import sys
 
 sys.path.append("src/SOFA")
 sys.path.append("src/SOFA/modules")
+import os
 import glob
 import pathlib
+import shutil
 import tqdm
 import re
 from SOFA.modules.g2p.base_g2p import DataFrameDataset
@@ -16,7 +18,12 @@ import SOFA.modules.AP_detector
 import torch
 from SOFA.train import LitForcedAlignmentTask
 import lightning as pl
-import concurrent.futures
+import datetime
+
+
+VERSION = "0.0.1"
+HIRAGANA_REGEX = re.compile(r"([あ-ん][ぁぃぅぇぉゃゅょ]|[あ-ん])")
+KATAKANA_REGEX = re.compile(r"([ア-ン][ァィゥェォャュョ]|[ア-ン])")
 
 
 class PyOpenJTalkG2P:
@@ -78,7 +85,39 @@ class PyOpenJTalkG2P:
 
 
 def main():
+    print(
+        f"Voicebank to DiffSinger {VERSION} - Convert the UTAU sound source folder to a configuration compatible with DiffSinger"
+    )
+    print()
+
     voicebank_dirs = [pathlib.Path(voicebank_dir) for voicebank_dir in sys.argv[1:]]
+
+    print("Phase 1: Generating text files...")
+    print()
+
+    with tqdm.tqdm(total=len(voicebank_dirs)) as pbar:
+        for voicebank_folder_path in voicebank_dirs:
+            voicebank_wav_files = list(voicebank_folder_path.glob("*.wav"))
+            for wav_file in voicebank_wav_files:
+                file_name = pathlib.Path(wav_file).stem
+                words = file_name[1:]
+                graphemes = [
+                    *HIRAGANA_REGEX.findall(words),
+                    *KATAKANA_REGEX.findall(words),
+                ]
+                with open(
+                    voicebank_folder_path + "/" + file_name + ".txt",
+                    "w",
+                    encoding="utf-8",
+                ) as f:
+                    f.write(" ".join(graphemes))
+            pbar.update(1)
+
+    print()
+    print("Phase 1: Done.")
+    print()
+    print("Phase 2: Generating label files...")
+    print()
 
     AP_detector_class = SOFA.modules.AP_detector.LoudnessSpectralcentroidAPDetector
     get_AP = AP_detector_class()
@@ -95,35 +134,73 @@ def main():
 
     trainer = pl.Trainer(logger=False)
 
-    for wav_file in voicebank_wav_files:
-        print()
-        file_name = pathlib.Path(wav_file).stem
-        print(file_name)
+    for voicebank_folder_path in voicebank_dirs:
+        voicebank_wav_files = list(voicebank_folder_path.glob("*.wav"))
+        for wav_file in voicebank_wav_files:
+            print()
+            file_name = pathlib.Path(wav_file).stem
+            print(file_name)
 
-        dataset = grapheme_to_phoneme.get_dataset(pathlib.Path(wav_file))
+            dataset = grapheme_to_phoneme.get_dataset(pathlib.Path(wav_file))
 
-        predictions = trainer.predict(
-            model, dataloaders=dataset, return_predictions=True
-        )
+            predictions = trainer.predict(
+                model, dataloaders=dataset, return_predictions=True
+            )
 
-        predictions = get_AP.process(predictions)
-        predictions = SOFA.infer.post_processing(predictions)
+            predictions = get_AP.process(predictions)
+            predictions = SOFA.infer.post_processing(predictions)
 
-        for (
-            wav_path,
-            wav_length,
-            confidence,
-            ph_seq,
-            ph_intervals,
-            word_seq,
-            word_intervals,
-        ) in predictions:
-            label = ""
-            for ph, (start, end) in zip(ph_seq, ph_intervals):
-                start_time = int(float(start) * 10000000)
-                end_time = int(float(end) * 10000000)
-                label += f"{start_time} {end_time} {ph}\n"
-            with open(
-                voicebank_folder_path + "/" + file_name + ".lab", "w", encoding="utf-8"
-            ) as f:
-                f.write(label)
+            for (
+                wav_path,
+                wav_length,
+                confidence,
+                ph_seq,
+                ph_intervals,
+                word_seq,
+                word_intervals,
+            ) in predictions:
+                label = ""
+                for ph, (start, end) in zip(ph_seq, ph_intervals):
+                    start_time = int(float(start) * 10000000)
+                    end_time = int(float(end) * 10000000)
+                    label += f"{start_time} {end_time} {ph}\n"
+                with open(
+                    voicebank_folder_path + "/" + file_name + ".lab",
+                    "w",
+                    encoding="utf-8",
+                ) as f:
+                    f.write(label)
+
+    print()
+    print("Phase 2: Done.")
+    print()
+    print("Phase 3: Generating directory structure...")
+    print()
+
+    folder_name = f"output/{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
+    os.makedirs(folder_name)
+    for voicebank_folder_path in voicebank_dirs:
+        with tqdm.tqdm(total=len(voicebank_wav_files)) as pbar:
+            suffix = voicebank_folder_path.stem
+            voicebank_wav_files = list(voicebank_folder_path.glob("*.wav"))
+            for wav_file in voicebank_wav_files:
+                file_name = pathlib.Path(wav_file).stem
+                os.mkdir(f"{folder_name}/{file_name}_{suffix}")
+                shutil.copy(
+                    wav_file,
+                    f"{folder_name}/{file_name}_{suffix}/{file_name}_{suffix}.wav",
+                )
+                shutil.copy(
+                    voicebank_folder_path / f"{file_name}.lab",
+                    f"{folder_name}/{file_name}_{suffix}/{file_name}_{suffix}.lab",
+                )
+                pbar.update(1)
+
+    print()
+    print("Phase 3: Done.")
+    print()
+    input("Press Enter to exit...")
+
+
+if __name__ == "__main__":
+    main()
