@@ -1,3 +1,6 @@
 [submodule "src/SOFA"]
 	path = src/SOFA
 	url = https://github.com/qiuqiao/SOFA
+[submodule "src/MakeDiffSinger"]
+	path = src/MakeDiffSinger
+	url = https://github.com/openvpi/MakeDiffSinger
