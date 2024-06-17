@@ -23,3 +23,11 @@ UTAUの音源ファイルからSOFAとMakeDiffSingerを用いて、学習前の�
     ```
 4. [PyTorchの公式サイト](https://pytorch.org/get-started/locally/)にて、セットアップをする
 5. [日本語のSOFAモデル](https://github.com/colstone/SOFA_Models/releases/tag/JPN-V0.0.2b)をダウンロードし、解凍後中にある「japanese-v2.0-45000.ckpt」を「src/cktp」に配置する
+6. src/main.py の args に音源フォルダを一つ(もしくは複数)渡し起動する
+    ```sh
+    python src/main.py example/A3 example/A2 example/A4
+    ```
+7. (任意) 音階が複数ある場合にはスピーカーを同一のものにする必要があるため、datasetsにすべてのデータセットを違うフォルダ名で配置し、src/merge_datasets.pyを実行する
+    ```sh
+    python src/merge_datasets.py
+    ```
