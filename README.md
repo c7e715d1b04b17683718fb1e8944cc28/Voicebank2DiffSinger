@@ -27,7 +27,3 @@ UTAUの音源ファイルからSOFAとMakeDiffSingerを用いて、学習前の�
     ```sh
     python src/main.py example/A3 example/A2 example/A4
     ```
-7. (任意) 音階が複数ある場合にはスピーカーを同一のものにする必要があるため、datasetsにすべてのデータセットを違うフォルダ名で配置し、src/merge_datasets.pyを実行する
-    ```sh
-    python src/merge_datasets.py
-    ```

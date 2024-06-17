@@ -18,7 +18,29 @@ from SOFA.train import LitForcedAlignmentTask
 import lightning as pl
 from click import Context
 from MakeDiffSinger.acoustic_forced_alignment.build_dataset import build_dataset
+import datetime
+import shutil
+import csv
+from click import Command
+import importlib.util
 
+
+def import_module_from_path(module_path: str, module_name: str):
+    spec = importlib.util.spec_from_file_location(module_name, module_path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+add_ph_num: Command = import_module_from_path(
+    "src/MakeDiffSinger/variance-temp-solution/add_ph_num.py", "add_ph_num"
+).add_ph_num
+estimate_midi: Command = import_module_from_path(
+    "src/MakeDiffSinger/variance-temp-solution/estimate_midi.py", "estimate_midi"
+).estimate_midi
+csv2ds: Command = import_module_from_path(
+    "src/MakeDiffSinger/variance-temp-solution/convert_ds.py", "convert_ds"
+).csv2ds
 
 VERSION = "0.0.1"
 HIRAGANA_REGEX = re.compile(r"([あ-ん][ぁぃぅぇぉゃゅょ]|[あ-ん])")
@@ -195,6 +217,100 @@ def main():
 
     print()
     print("Phase 3: Done.")
+    print()
+    print("Phase 4: Merge datasets...")
+    print()
+
+    transcriptions = []
+    outputs_path = pathlib.Path("src/outputs")
+    output_path = outputs_path / datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+    output_path.mkdir()
+    output_wavs_path = output_path / "wavs"
+    output_wavs_path.mkdir()
+    with tqdm.tqdm(total=len(voicebank_dirs)) as pbar:
+        for voicebank_folder_path in voicebank_dirs:
+            with open(
+                voicebank_folder_path / "Dataset" / "transcriptions.csv",
+                "r",
+                encoding="utf-8",
+            ) as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    transcriptions.append(
+                        [
+                            f"{row['name']}_{voicebank_folder_path.stem}",
+                            row["ph_seq"],
+                            row["ph_dur"],
+                        ]
+                    )
+            for wav_path in (voicebank_folder_path / "Dataset" / "wavs").glob("*.wav"):
+                shutil.copy(
+                    wav_path,
+                    output_wavs_path
+                    / f"{wav_path.stem}_{voicebank_folder_path.stem}.wav",
+                )
+            pbar.update(1)
+    with open(
+        output_path / "transcriptions.csv", "w", encoding="utf-8", newline=""
+    ) as f:
+        writer = csv.writer(f)
+        writer.writerow(["name", "ph_seq", "ph_dur"])
+        writer.writerows(transcriptions)
+
+    print()
+    print("Phase 4: Done.")
+    print()
+    print("Phase 5: Add phoneme number...")
+    print()
+
+    ctx = Context(add_ph_num)
+    with ctx:
+        add_ph_num.parse_args(
+            ctx,
+            [
+                str(output_path / "transcriptions.csv"),
+                "--dictionary",
+                "src/dictionaries/japanese-dictionary.txt",
+            ],
+        )
+        add_ph_num.invoke(ctx)
+
+    print()
+    print("Phase 5: Done.")
+    print()
+    print("Phase 6: Estimate MIDI...")
+    print()
+
+    ctx = Context(estimate_midi)
+    with ctx:
+        estimate_midi.parse_args(
+            ctx,
+            [
+                str(output_path / "transcriptions.csv"),
+                str(output_wavs_path),
+            ],
+        )
+        estimate_midi.invoke(ctx)
+
+    print()
+    print("Phase 6: Done.")
+    print()
+    print("Phase 7: Convert CSV to DiffSinger...")
+    print()
+
+    ctx = Context(csv2ds)
+    with ctx:
+        csv2ds.parse_args(
+            ctx,
+            [
+                str(output_path / "transcriptions.csv"),
+                str(output_wavs_path),
+            ],
+        )
+        csv2ds.invoke(ctx)
+
+    print()
+    print("Phase 7: Done.")
     print()
     input("Press Enter to exit...")
 
