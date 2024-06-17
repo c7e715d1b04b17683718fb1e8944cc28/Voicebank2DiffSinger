@@ -4,6 +4,7 @@ UTAUの音源ファイルからSOFAとMakeDiffSingerを用いて、学習前の�
 ## 前提要件
 - C++ によるデスクトップ開発 (Visual Studio)
 - CMake
+- Python 3.12未満 (3.10.11にてテスト済み)
 
 ## 使い方 (Windows)
 1. このリポジトリをsubmoduleを含めcloneする
