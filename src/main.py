@@ -3,6 +3,7 @@ import sys
 sys.path.append("src/SOFA")
 sys.path.append("src/SOFA/modules")
 sys.path.append("src/MakeDiffSinger/acoustic_forced_alignment")
+sys.path.append("src/MakeDiffSinger/variance-temp-solution")
 import pathlib
 import tqdm
 import re
