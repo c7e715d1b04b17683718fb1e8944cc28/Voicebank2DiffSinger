@@ -4,9 +4,12 @@ sys.path.append("src/SOFA")
 sys.path.append("src/SOFA/modules")
 sys.path.append("src/MakeDiffSinger/acoustic_forced_alignment")
 sys.path.append("src/MakeDiffSinger/variance-temp-solution")
+import tempfile
 import pathlib
 import tqdm
 import re
+from pydub import AudioSegment
+from pydub.silence import detect_nonsilent
 from SOFA.modules.g2p.base_g2p import DataFrameDataset
 import pandas as pd
 import warnings
@@ -131,16 +134,61 @@ def main():
         f"Voicebank to DiffSinger {VERSION} - Convert the UTAU sound source folder to a configuration compatible with DiffSinger"
     )
     print()
+    if len(sys.argv) < 2:
+        print("Usage: python src/main.py [voicebank_dir1] [voicebank_dir2] ...")
+        sys.exit(1)
+    detect_nonslicent_flag = input("Do you want to detect nonsilence? (y/n): ") == "y"
+    print()
 
     voicebank_dirs = [pathlib.Path(voicebank_dir) for voicebank_dir in sys.argv[1:]]
 
-    print("Phase 1: Generating text files...")
+    print("Phase 1: Merge voicebanks...")
     print()
 
-    with tqdm.tqdm(total=len(voicebank_dirs)) as pbar:
-        for voicebank_folder_path in voicebank_dirs:
-            voicebank_wav_files = list(voicebank_folder_path.glob("*.wav"))
-            for wav_file in voicebank_wav_files:
+    with tempfile.TemporaryDirectory() as temp_dir_str:
+        temp_dir = pathlib.Path(temp_dir_str)
+        with tqdm.tqdm(total=len(voicebank_dirs)) as pbar:
+            for voicebank_dir in voicebank_dirs:
+                for wav_file in voicebank_dir.glob("*.wav"):
+                    shutil.copy(
+                        wav_file, temp_dir / f"{wav_file.stem}_{voicebank_dir.stem}.wav"
+                    )
+                pbar.update(1)
+
+        wav_files = list(temp_dir.glob("*.wav"))
+
+        print()
+        print("Phase 1: Done.")
+        print()
+
+        if detect_nonslicent_flag:
+            print("Phase 1-1: Detecting nonsilence...")
+            print()
+
+            with tqdm.tqdm(total=len(wav_files)) as pbar:
+                for wav_file in wav_files:
+                    audio: AudioSegment = AudioSegment.from_file(wav_file)
+                    nonsilent_ranges = detect_nonsilent(
+                        audio, min_silence_len=500, silence_thresh=-50
+                    )
+                    if nonsilent_ranges:
+                        trimmed_audio = audio[
+                            max(0, nonsilent_ranges[0][0] - 200) : min(
+                                len(audio), nonsilent_ranges[-1][1] + 200
+                            )
+                        ]
+                        trimmed_audio.export(wav_file, format="wav")
+                    pbar.update(1)
+
+            print()
+            print("Phase 1-1: Done.")
+            print()
+
+        print("Phase 2: Generating text files...")
+        print()
+
+        with tqdm.tqdm(total=len(wav_files)) as pbar:
+            for wav_file in wav_files:
                 file_name = pathlib.Path(wav_file).stem
                 words = file_name[1:]
                 graphemes = remove_specific_consecutive_duplicates(
@@ -151,39 +199,35 @@ def main():
                     ["あ", "い", "う", "え", "お", "ん"],
                 )
                 with open(
-                    str(voicebank_folder_path) + "/" + file_name + ".txt",
+                    str(temp_dir) + "/" + file_name + ".txt",
                     "w",
                     encoding="utf-8",
                 ) as f:
                     f.write(" ".join(graphemes))
-            pbar.update(1)
+                pbar.update(1)
 
-    print()
-    print("Phase 1: Done.")
-    print()
-    print("Phase 2: Generating TextGrids...")
-    print()
+        print()
+        print("Phase 2: Done.")
+        print()
+        print("Phase 3: Generating TextGrids...")
+        print()
 
-    AP_detector_class = SOFA.modules.AP_detector.LoudnessSpectralcentroidAPDetector
-    get_AP = AP_detector_class()
+        AP_detector_class = SOFA.modules.AP_detector.LoudnessSpectralcentroidAPDetector
+        get_AP = AP_detector_class()
 
-    g2p_class = PyOpenJTalkG2P
-    grapheme_to_phoneme = g2p_class()
+        g2p_class = PyOpenJTalkG2P
+        grapheme_to_phoneme = g2p_class()
 
-    torch.set_grad_enabled(False)
+        torch.set_grad_enabled(False)
 
-    model = LitForcedAlignmentTask.load_from_checkpoint(
-        "src/cktp/japanese-v2.0-45000.ckpt"
-    )
-    model.set_inference_mode("force")
-
-    trainer = pl.Trainer(logger=False)
-
-    for voicebank_folder_path in voicebank_dirs:
-        voicebank_wav_files = list(voicebank_folder_path.glob("*.wav"))
-        dataset = grapheme_to_phoneme.get_dataset(
-            list(voicebank_folder_path.glob("*.wav"))
+        model = LitForcedAlignmentTask.load_from_checkpoint(
+            "src/cktp/japanese-v2.0-45000.ckpt"
         )
+        model.set_inference_mode("force")
+
+        trainer = pl.Trainer(logger=False)
+
+        dataset = grapheme_to_phoneme.get_dataset(wav_files)
 
         predictions = trainer.predict(
             model, dataloaders=dataset, return_predictions=True
@@ -194,69 +238,35 @@ def main():
 
         SOFA.infer.save_textgrids(predictions)
 
-    print()
-    print("Phase 2: Done.")
-    print()
-    print("Phase 3: Build dataset...")
-    print()
+        print()
+        print("Phase 3: Done.")
+        print()
+        print("Phase 4: Build dataset...")
+        print()
 
-    for voicebank_folder_path in voicebank_dirs:
         ctx = Context(build_dataset)
         with ctx:
             build_dataset.parse_args(
                 ctx,
                 [
                     "--wavs",
-                    str(voicebank_folder_path),
+                    str(temp_dir),
                     "--tg",
-                    str(voicebank_folder_path / "TextGrid"),
+                    str(temp_dir / "TextGrid"),
                     "--dataset",
-                    str(voicebank_folder_path / "Dataset"),
+                    str(temp_dir / "Dataset"),
                 ],
             )
             build_dataset.invoke(ctx)
 
-    print()
-    print("Phase 3: Done.")
-    print()
-    print("Phase 4: Merge datasets...")
-    print()
-
-    transcriptions = []
-    outputs_path = pathlib.Path("src/outputs")
-    output_path = outputs_path / datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-    output_path.mkdir()
-    output_wavs_path = output_path / "wavs"
-    output_wavs_path.mkdir()
-    with tqdm.tqdm(total=len(voicebank_dirs)) as pbar:
-        for voicebank_folder_path in voicebank_dirs:
-            with open(
-                voicebank_folder_path / "Dataset" / "transcriptions.csv",
-                "r",
-                encoding="utf-8",
-            ) as f:
-                reader = csv.DictReader(f)
-                for row in reader:
-                    transcriptions.append(
-                        [
-                            f"{row['name']}_{voicebank_folder_path.stem}",
-                            row["ph_seq"],
-                            row["ph_dur"],
-                        ]
-                    )
-            for wav_path in (voicebank_folder_path / "Dataset" / "wavs").glob("*.wav"):
-                shutil.copy(
-                    wav_path,
-                    output_wavs_path
-                    / f"{wav_path.stem}_{voicebank_folder_path.stem}.wav",
-                )
-            pbar.update(1)
-    with open(
-        output_path / "transcriptions.csv", "w", encoding="utf-8", newline=""
-    ) as f:
-        writer = csv.writer(f)
-        writer.writerow(["name", "ph_seq", "ph_dur"])
-        writer.writerows(transcriptions)
+        outputs_path = pathlib.Path("src/outputs")
+        output_path = outputs_path / datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+        output_path.mkdir()
+        shutil.move(temp_dir / "Dataset" / "transcriptions.csv", output_path)
+        shutil.move(temp_dir / "Dataset" / "wavs", output_path)
+        output_wavs_path = output_path / "wavs"
+        print(str(temp_dir))
+        input("Press Enter to continue...")
 
     print()
     print("Phase 4: Done.")

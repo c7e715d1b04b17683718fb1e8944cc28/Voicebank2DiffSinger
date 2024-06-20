@@ -1,1 +1,2 @@
 pyopenjtalk==0.3.3
+pydub==0.25.1
