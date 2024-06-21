@@ -265,8 +265,6 @@ def main():
         shutil.move(temp_dir / "Dataset" / "transcriptions.csv", output_path)
         shutil.move(temp_dir / "Dataset" / "wavs", output_path)
         output_wavs_path = output_path / "wavs"
-        print(str(temp_dir))
-        input("Press Enter to continue...")
 
     print()
     print("Phase 4: Done.")
