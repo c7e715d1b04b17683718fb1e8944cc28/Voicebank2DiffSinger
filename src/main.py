@@ -445,7 +445,7 @@ def main():
                                     grapheme_tier.add(
                                         0,
                                         (oto.offset + oto.preutterance) / 1000,
-                                        "SP",
+                                        "AP",
                                     )
                                     grapheme_tier.add(
                                         (oto.offset + oto.preutterance) / 1000,
@@ -460,7 +460,7 @@ def main():
                                     phoneme_tier.add(
                                         0,
                                         (oto.offset + oto.preutterance) / 1000,
-                                        "SP",
+                                        "AP",
                                     )
                                     phoneme_tier.add(
                                         (oto.offset + oto.preutterance) / 1000,
@@ -498,7 +498,7 @@ def main():
                                     grapheme_tier.add(
                                         0,
                                         (oto.offset + oto.overlap) / 1000,
-                                        "SP",
+                                        "AP",
                                     )
                                     grapheme_tier.add(
                                         (oto.offset + oto.overlap) / 1000,
@@ -515,7 +515,7 @@ def main():
                                     phoneme_tier.add(
                                         0,
                                         (oto.offset + oto.overlap) / 1000,
-                                        "SP",
+                                        "AP",
                                     )
                                     phoneme_tier.add(
                                         (oto.offset + oto.overlap) / 1000,
@@ -551,7 +551,7 @@ def main():
                                     grapheme_tier.add(
                                         0,
                                         (oto.offset + oto.preutterance) / 1000,
-                                        "SP",
+                                        "AP",
                                     )
                                     grapheme_tier.add(
                                         (oto.offset + oto.preutterance) / 1000,
@@ -562,7 +562,7 @@ def main():
                                     phoneme_tier.add(
                                         0,
                                         (oto.offset + oto.preutterance) / 1000,
-                                        "SP",
+                                        "AP",
                                     )
                                     phoneme_tier.add(
                                         (oto.offset + oto.preutterance) / 1000,
@@ -589,7 +589,7 @@ def main():
                                     grapheme_tier.add(
                                         0,
                                         (oto.offset + oto.overlap) / 1000,
-                                        "SP",
+                                        "AP",
                                     )
                                     grapheme_tier.add(
                                         (oto.offset + oto.overlap) / 1000,
@@ -600,7 +600,7 @@ def main():
                                     phoneme_tier.add(
                                         0,
                                         (oto.offset + oto.overlap) / 1000,
-                                        "SP",
+                                        "AP",
                                     )
                                     phoneme_tier.add(
                                         (oto.offset + oto.overlap) / 1000,
@@ -630,7 +630,7 @@ def main():
                                     grapheme_tier.add(
                                         0,
                                         (oto.offset + oto.preutterance) / 1000,
-                                        "SP",
+                                        "AP",
                                     )
                                     grapheme_tier.add(
                                         (oto.offset + oto.preutterance) / 1000,
@@ -641,7 +641,7 @@ def main():
                                     phoneme_tier.add(
                                         0,
                                         (oto.offset + oto.preutterance) / 1000,
-                                        "SP",
+                                        "AP",
                                     )
                                     phoneme_tier.add(
                                         (oto.offset + oto.preutterance) / 1000,
@@ -668,7 +668,7 @@ def main():
                                     grapheme_tier.add(
                                         0,
                                         (oto.offset + oto.overlap) / 1000,
-                                        "SP",
+                                        "AP",
                                     )
                                     grapheme_tier.add(
                                         (oto.offset + oto.overlap) / 1000,
@@ -679,7 +679,7 @@ def main():
                                     phoneme_tier.add(
                                         0,
                                         (oto.offset + oto.overlap) / 1000,
-                                        "SP",
+                                        "AP",
                                     )
                                     phoneme_tier.add(
                                         (oto.offset + oto.overlap) / 1000,
