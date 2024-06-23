@@ -2,4 +2,3 @@ pyopenjtalk==0.3.3
 pydub==0.25.1
 beautifulsoup4==4.12.3
 utaupy==1.18.3
-praatio==5.1.1
