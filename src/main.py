@@ -9,7 +9,7 @@ import pathlib
 import tqdm
 import re
 from pydub import AudioSegment
-from pydub.silence import detect_nonsilent
+from pydub.effects import strip_silence, normalize
 from SOFA.modules.g2p.base_g2p import DataFrameDataset
 import pandas as pd
 import warnings
@@ -201,6 +201,7 @@ def main():
     else:
         print("Invalid input.")
         sys.exit(1)
+    normalize_flag = input("Do you want to normalize the volume? (y/n): ") == "y"
     detect_nonslicent_flag = input("Do you want to detect nonsilence? (y/n): ") == "y"
     print()
 
@@ -226,6 +227,21 @@ def main():
             print()
             print("Phase 1: Done.")
             print()
+            
+            if normalize_flag:
+                print("Phase 1-1: Normalizing volume...")
+                print()
+
+                with tqdm.tqdm(total=len(wav_files)) as pbar:
+                    for wav_file in wav_files:
+                        audio: AudioSegment = AudioSegment.from_file(wav_file)
+                        normalized_audio: AudioSegment = normalize(audio)
+                        normalized_audio.export(wav_file, format="wav")
+                        pbar.update(1)
+
+                print()
+                print("Phase 1-1: Done.")
+                print()
 
             if detect_nonslicent_flag:
                 print("Phase 1-1: Detecting nonsilence...")
@@ -234,16 +250,10 @@ def main():
                 with tqdm.tqdm(total=len(wav_files)) as pbar:
                     for wav_file in wav_files:
                         audio: AudioSegment = AudioSegment.from_file(wav_file)
-                        nonsilent_ranges = detect_nonsilent(
-                            audio, min_silence_len=500, silence_thresh=-50
+                        trimmed_audio: AudioSegment = strip_silence(
+                            audio, silence_thresh=-50, min_silence_len=500, padding=200
                         )
-                        if nonsilent_ranges:
-                            trimmed_audio = audio[
-                                max(0, nonsilent_ranges[0][0] - 200) : min(
-                                    len(audio), nonsilent_ranges[-1][1] + 200
-                                )
-                            ]
-                            trimmed_audio.export(wav_file, format="wav")
+                        trimmed_audio.export(wav_file, format="wav")
                         pbar.update(1)
 
                 print()
