@@ -201,8 +201,14 @@ def main():
     else:
         print("Invalid input.")
         sys.exit(1)
-    normalize_flag = input("Do you want to normalize the volume? (y/n): ") == "y"
-    detect_nonslicent_flag = input("Do you want to detect nonsilence? (y/n): ") == "y"
+    normalize_flag = False
+    if forced_aligner == "SOFA" or forced_aligner == "Moresampler":
+        normalize_flag = input("Do you want to normalize the volume? (y/n): ") == "y"
+    detect_nonslicent_flag = False
+    if forced_aligner == "SOFA":
+        detect_nonslicent_flag = (
+            input("Do you want to detect nonsilence? (y/n): ") == "y"
+        )
     print()
 
     voicebank_dirs = [pathlib.Path(voicebank_dir) for voicebank_dir in sys.argv[1:]]
@@ -227,7 +233,7 @@ def main():
             print()
             print("Phase 1: Done.")
             print()
-            
+
             if normalize_flag:
                 print("Phase 1-1: Normalizing volume...")
                 print()
@@ -250,9 +256,7 @@ def main():
                 with tqdm.tqdm(total=len(wav_files)) as pbar:
                     for wav_file in wav_files:
                         audio: AudioSegment = AudioSegment.from_file(wav_file)
-                        trimmed_audio: AudioSegment = strip_silence(
-                            audio, silence_thresh=-50, min_silence_len=500, padding=200
-                        )
+                        trimmed_audio: AudioSegment = strip_silence(audio)
                         trimmed_audio.export(wav_file, format="wav")
                         pbar.update(1)
 
@@ -898,6 +902,21 @@ def main():
             print()
             print("Phase 3: Done.")
             print()
+
+            if normalize_flag:
+                print("Phase 3-1: Normalizing volume...")
+                print()
+
+                with tqdm.tqdm(total=len(wav_files)) as pbar:
+                    for wav_file in wav_files:
+                        audio: AudioSegment = AudioSegment.from_file(wav_file)
+                        normalized_audio: AudioSegment = normalize(audio)
+                        normalized_audio.export(wav_file, format="wav")
+                        pbar.update(1)
+
+                print()
+                print("Phase 3-1: Done.")
+                print()
         else:
             print("Invalid forced aligner.")
             sys.exit(1)
